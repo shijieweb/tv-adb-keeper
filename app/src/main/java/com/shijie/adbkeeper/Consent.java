@@ -1,6 +1,8 @@
 package com.shijie.adbkeeper;
 
 import android.accessibilityservice.AccessibilityService;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -30,7 +32,23 @@ final class Consent {
     /** 上一次点击的时间，避免同一次弹窗被连点（会让系统当成异常输入）。 */
     private static volatile long lastClickAt = 0L;
 
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
     private Consent() {}
+
+    /**
+     * 从任意线程调用的安全版本（KeeperService 的 3 秒心跳跑在 HandlerThread 上）。
+     * 无障碍 API 统一回主线程调，避免和系统 binder 交互时出意外。
+     */
+    static void clickIfNeededAsync(final AccessibilityService s) {
+        if (s == null) return;
+        MAIN.post(new Runnable() {
+            @Override
+            public void run() {
+                clickIfNeeded(s);
+            }
+        });
+    }
 
     /** 返回 true 表示已经点过（或刚点过），调用方不用再重试。 */
     static boolean clickIfNeeded(AccessibilityService s) {

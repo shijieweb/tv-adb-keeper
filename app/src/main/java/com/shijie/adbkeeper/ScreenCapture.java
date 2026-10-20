@@ -51,6 +51,12 @@ final class ScreenCapture {
     private static final int JPEG_QUALITY = 60;
     /** 没人看画面时，超过这个时间就不再压 JPEG。 */
     private static final long ACTIVE_WINDOW_MS = 5000L;
+    /**
+     * 两次编码的最小间隔。虚拟屏是按屏幕刷新率（60fps）持续出帧的，
+     * 每帧都压 JPEG 会把这个 4 核 A55 直接吃满、还会拖慢电视本身。
+     * 200ms ≈ 5fps，做遥控够用，CPU 占用可以忽略。
+     */
+    private static final long MIN_ENCODE_GAP_MS = 200L;
 
     private static volatile ScreenCapture instance;
 
@@ -289,6 +295,8 @@ final class ScreenCapture {
             img = ir.acquireLatestImage();
             if (img == null) return;
             if (SystemClock.elapsedRealtime() > activeUntil) return;   // 没人看，跳过编码
+            // 节流：60fps 全压 JPEG 会把 CPU 吃满、还拖慢电视本身
+            if (SystemClock.elapsedRealtime() - jpegAt < MIN_ENCODE_GAP_MS) return;
             byte[] out = toJpeg(img);
             if (out != null) {
                 jpeg = out;

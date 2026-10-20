@@ -11,7 +11,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
-import android.provider.Settings;
 import android.util.Log;
 
 /**
@@ -23,7 +22,7 @@ public class KeeperService extends Service {
     private static final String TAG = "AdbKeeper";
     private static final String CH = "keeper";
     private static final int NOTI_ID = 1001;
-    /** 检查间隔：开机阶段厂商 20 秒左右才动手，这里 3 秒一轮足够抢回来。 */
+    /** 检查间隔：开机阶段厂商 20 秒左右才动手，3 秒一轮足够抢回来。 */
     private static final long INTERVAL_MS = 3000L;
 
     private HandlerThread thread;
@@ -35,7 +34,7 @@ public class KeeperService extends Service {
         public void run() {
             if (!running) return;
             try {
-                ensureAdbOn();
+                KeeperUtil.restore(getApplicationContext());
             } catch (Throwable t) {
                 Log.w(TAG, "check failed", t);
             }
@@ -70,30 +69,13 @@ public class KeeperService extends Service {
             worker.post(tick);
             Log.i(TAG, "keeper started");
         }
-        // 立刻做一次，不等第一轮
         worker.post(new Runnable() {
             @Override public void run() {
-                try { ensureAdbOn(); } catch (Throwable t) { Log.w(TAG, "immediate", t); }
+                try { KeeperUtil.restore(getApplicationContext()); }
+                catch (Throwable t) { Log.w(TAG, "immediate", t); }
             }
         });
         return START_STICKY;
-    }
-
-    /** 核心逻辑：把 adb_enabled 拉回 1。 */
-    private void ensureAdbOn() {
-        if (checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS")
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "no WRITE_SECURE_SETTINGS, skip");
-            return;
-        }
-        int cur = Settings.Global.getInt(getContentResolver(), Settings.Global.ADB_ENABLED, 1);
-        if (cur == 1) return;
-        boolean ok = Settings.Global.putInt(getContentResolver(), Settings.Global.ADB_ENABLED, 1);
-        if (ok) {
-            Log.i(TAG, "adb_enabled 0 -> 1 restored");
-        } else {
-            Log.w(TAG, "write adb_enabled failed");
-        }
     }
 
     private void startForegroundSafely() {

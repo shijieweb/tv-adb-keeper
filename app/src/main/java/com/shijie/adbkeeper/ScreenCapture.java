@@ -271,14 +271,21 @@ final class ScreenCapture {
             }
             return null;
         }
+        // 有帧就立刻返回，不检查新鲜度。
+        // 原因：虚拟屏只在画面变化时才推新图，画面静止（比如只是在放歌、桌面不动）时
+        // 根本没有新帧可等。以前这里要求 age < 1.5s，结果每次抓图都白等满 2 秒，
+        // 网页上一卡一卡的。画面变了自然会有新 JPEG 推过来，用户看到的还是最新的。
+        byte[] cur0 = jpeg;
+        if (cur0 != null) return cur0;
+
+        // 只有连一帧都还没有（刚启动 / 刚授权完）才等。
         long deadline = SystemClock.elapsedRealtime() + maxWaitMs;
         synchronized (frameLock) {
             while (true) {
                 byte[] cur = jpeg;
-                long age = SystemClock.elapsedRealtime() - jpegAt;
-                if (cur != null && age < 1500L) return cur;
+                if (cur != null) return cur;
                 long left = deadline - SystemClock.elapsedRealtime();
-                if (left <= 0) return cur;
+                if (left <= 0) return null;
                 try {
                     frameLock.wait(left);
                 } catch (InterruptedException e) {

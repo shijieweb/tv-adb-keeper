@@ -164,7 +164,7 @@ function loop() {
   clearTimeout(syncTimer);
   if (!syncOn) return;
   pullFrame(false);
-  syncTimer = setTimeout(loop, 1400);
+  syncTimer = setTimeout(loop, 320);
 }
 
 function toggleSync() {

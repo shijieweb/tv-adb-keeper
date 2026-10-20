@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>电视触控板</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; padding: 0;
+    background: #0d1117; color: #e6edf3;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+  header {
+    padding: 10px 14px 6px;
+    font-size: 15px; color: #9aa6b2;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header b { color: #e6edf3; font-size: 17px; }
+  #padwrap { padding: 0 10px; }
+  #pad {
+    position: relative;
+    width: 100%; aspect-ratio: 16 / 9;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  #pad .hint {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #30363d; font-size: 15px; pointer-events: none;
+    text-align: center; line-height: 1.6;
+  }
+  #dot {
+    position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    border-radius: 50%; background: rgba(88,166,255,.75);
+    border: 2px solid #58a6ff;
+    pointer-events: none; opacity: 0;
+    transition: opacity .35s;
+  }
+  #dot.on { opacity: 1; transition: none; }
+  #dot.trail {
+    transition: left .10s linear, top .10s linear, opacity .35s;
+  }
+  .row {
+    display: flex; gap: 8px; padding: 10px 10px 0;
+    flex-wrap: wrap;
+  }
+  button {
+    flex: 1 1 0; min-width: 72px;
+    padding: 14px 8px;
+    font-size: 16px; color: #e6edf3;
+    background: #21262d; border: 1px solid #30363d;
+    border-radius: 10px;
+  }
+  button:active { background: #30363d; }
+  #msg { padding: 8px 14px 0; font-size: 13px; color: #7d8590; min-height: 20px; }
+  #apps { padding: 6px 10px 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #apps button { font-size: 14px; padding: 12px 6px; }
+  h2 { font-size: 13px; color: #7d8590; font-weight: normal; margin: 14px 0 0 14px; }
+</style>
+</head>
+<body>
+<header><b>电视触控板</b><span id="state">连接中…</span></header>
+
+<div id="padwrap">
+  <div id="pad">
+    <div class="hint">在这里点 = 点电视<br>按住拖动 = 滑动</div>
+    <div id="dot"></div>
+  </div>
+</div>
+
+<div class="row">
+  <button onclick="key('home')">主页</button>
+  <button onclick="key('back')">返回</button>
+  <button onclick="key('recents')">最近</button>
+  <button onclick="key('notifications')">通知</button>
+</div>
+
+<h2>打开应用</h2>
+<div id="apps"></div>
+
+<div id="msg"></div>
+
+<script>
+const pad = document.getElementById('pad');
+const dot = document.getElementById('dot');
+const msg = document.getElementById('msg');
+const stateEl = document.getElementById('state');
+const W = 1920, H = 1080;
+
+function showMsg(t) { msg.textContent = t; }
+
+function mark(px, py) {
+  dot.classList.remove('trail');
+  dot.style.left = px + 'px';
+  dot.style.top = py + 'px';
+  dot.classList.add('on');
+  clearTimeout(mark._t);
+  mark._t = setTimeout(() => {
+    dot.classList.add('trail');
+    dot.classList.remove('on');
+  }, 260);
+}
+
+function toTv(clientX, clientY) {
+  const r = pad.getBoundingClientRect();
+  const x = Math.round((clientX - r.left) / r.width * W);
+  const y = Math.round((clientY - r.top) / r.height * H);
+  return {
+    x: Math.max(0, Math.min(W - 1, x)),
+    y: Math.max(0, Math.min(H - 1, y)),
+    lx: clientX - r.left,
+    ly: clientY - r.top
+  };
+}
+
+function post(path, params) {
+  const body = new URLSearchParams(params || {});
+  stateEl.textContent = '发送中…';
+  return fetch(path, { method: 'POST', body })
+    .then(r => r.text())
+    .then(t => { stateEl.textContent = t; return t; })
+    .catch(e => { stateEl.textContent = '连不上'; showMsg('请求失败：' + e); });
+}
+
+/* ---- 触摸 / 鼠标统一用 Pointer 事件 ---- */
+let down = null;
+
+pad.addEventListener('pointerdown', e => {
+  pad.setPointerCapture(e.pointerId);
+  const p = toTv(e.clientX, e.clientY);
+  down = { p, t: Date.now(), moved: false };
+  mark(p.lx, p.ly);
+  e.preventDefault();
+});
+
+pad.addEventListener('pointermove', e => {
+  if (!down) return;
+  const p = toTv(e.clientX, e.clientY);
+  const d = Math.hypot(p.x - down.p.x, p.y - down.p.y);
+  if (d > 12) down.moved = true;
+  mark(p.lx, p.ly);
+  e.preventDefault();
+});
+
+pad.addEventListener('pointerup', e => {
+  if (!down) return;
+  const p = toTv(e.clientX, e.clientY);
+  const dur = Date.now() - down.t;
+  const d = Math.hypot(p.x - down.p.x, p.y - down.p.y);
+
+  if (down.moved && d > 24) {
+    post('/swipe', { x1: down.p.x, y1: down.p.y, x2: p.x, y2: p.y, ms: Math.min(2000, Math.max(120, dur)) });
+  } else if (dur > 550) {
+    post('/long', { x: p.x, y: p.y, ms: Math.min(4000, dur) });
+  } else {
+    post('/tap', { x: p.x, y: p.y });
+  }
+  down = null;
+  e.preventDefault();
+});
+
+pad.addEventListener('contextmenu', e => e.preventDefault());
+
+function key(name) {
+  post('/key', { k: name });
+}
+
+function loadApps() {
+  fetch('/apps').then(r => r.json()).then(list => {
+    const box = document.getElementById('apps');
+    box.innerHTML = '';
+    list.forEach(a => {
+      const b = document.createElement('button');
+      b.textContent = a.label;
+      b.onclick = () => post('/open', { pkg: a.pkg });
+      box.appendChild(b);
+    });
+    if (!list.length) box.innerHTML = '<span style="color:#7d8590;font-size:13px">没读到应用列表</span>';
+  }).catch(() => {});
+}
+
+fetch('/status').then(r => r.text()).then(t => { stateEl.textContent = t; }).catch(() => { stateEl.textContent = '离线'; });
+loadApps();
+</script>
+</body>
+</html>

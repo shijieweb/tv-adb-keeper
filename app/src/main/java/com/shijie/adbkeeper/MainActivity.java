@@ -44,13 +44,14 @@ public class MainActivity extends Activity {
         sv.addView(root);
 
         root.addView(title("ADB 常开", 34, "#FFFFFF"));
-        root.addView(title("这个应用只做一件事：让这台电视的 ADB 调试开关永远保持打开，\n"
-                + "这样重启之后你的手机/电脑浏览器遥控还能直接用，不用再进设置里手动开。", 16, "#9AA6B2"));
+        root.addView(title("两件事：① 让这台电视的 ADB 开关重启后自动恢复；\n"
+                + "② 开一个网页遥控端口，手机/电脑连同一个 WiFi 就能点电视（不需要 ADB）。", 16, "#9AA6B2"));
 
         status = new TextView(this);
-        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
         status.setTextColor(Color.parseColor("#E6EDF3"));
         status.setPadding(0, dp(24), 0, dp(24));
+        status.setLineSpacing(dp(6), 1f);
         root.addView(status);
 
         root.addView(button("立即检查并开启一次", new View.OnClickListener() {
@@ -72,6 +73,14 @@ public class MainActivity extends Activity {
                 refresh();
             }
         }));
+        root.addView(button("启动网页遥控端口", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                WebServer.get(getApplicationContext()).start();
+                ui.postDelayed(new Runnable() {
+                    @Override public void run() { refresh(); }
+                }, 500);
+            }
+        }));
         root.addView(button("打开开发者选项页", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -89,9 +98,10 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         ui.post(refresher);
-        // 每次打开界面：确保守护在跑 + 确保开机自愈入口在册（幂等）
+        // 每次打开界面：确保守护在跑 + 确保开机自愈入口在册 + 确保网页端口开着（全部幂等）
         KeeperUtil.registerSelfAsA11y(getApplicationContext());
         KeeperJobService.arm(getApplicationContext());
+        WebServer.get(getApplicationContext()).start();
         Intent i = new Intent(this, KeeperService.class);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
     }
@@ -110,10 +120,22 @@ public class MainActivity extends Activity {
             v = Settings.Global.getInt(getContentResolver(), Settings.Global.ADB_ENABLED, 0);
         } catch (Exception ignore) {}
 
+        WebServer ws = WebServer.get(getApplicationContext());
+        boolean webUp = ws.isRunning();
+        String ip = WebServer.localIp();
+
         StringBuilder sb = new StringBuilder();
         sb.append("ADB 写入权限：").append(granted ? "已授予 ✓" : "未授予 ✗").append('\n');
         sb.append("当前 ADB 开关：").append(v == 1 ? "开 ✓" : (v == 0 ? "关 ✗" : "读不到")).append('\n');
-        sb.append("开机自愈入口：").append(a11yRegistered() ? "已注册 ✓" : "未注册 ✗");
+        sb.append("开机自愈入口：").append(a11yRegistered() ? "已注册 ✓" : "未注册 ✗").append('\n');
+        sb.append("点击注入通道：").append(Remote.canInject() ? "已连通 ✓" : "未连通 ✗").append('\n');
+        sb.append("网页遥控：");
+        if (webUp) {
+            sb.append("已开启 ✓\n    http://").append(ip).append(':').append(ws.port());
+        } else {
+            sb.append("未开启 ✗");
+        }
+
         if (!granted) {
             sb.append("\n\n需要先给一次权限（只做一次，重启不会丢）：\n\n");
             sb.append("adb shell pm grant com.shijie.adbkeeper android.permission.WRITE_SECURE_SETTINGS");

@@ -14,15 +14,16 @@ import android.os.IBinder;
 import android.util.Log;
 
 /**
- * 守护服务：定期检查 adb_enabled，被厂商改回 0 就写回 1。
+ * 守护服务：每 3 秒检查一次 adb_enabled，被厂商改回 0 就写回 1。
  * 只依赖 WRITE_SECURE_SETTINGS（granted 后持久，重启不丢）。
+ * 不做 adbd 健康探测 / 0-1 踢动 —— 那会误伤正在使用的连接，且实测不需要。
  */
 public class KeeperService extends Service {
 
     private static final String TAG = "AdbKeeper";
     private static final String CH = "keeper";
     private static final int NOTI_ID = 1001;
-    /** 检查间隔：开机阶段厂商 20 秒左右才动手，3 秒一轮足够抢回来。 */
+    /** 检查间隔：开机阶段厂商 12-20 秒才动手，3 秒一轮足够抢回来。 */
     private static final long INTERVAL_MS = 3000L;
 
     private HandlerThread thread;
@@ -34,7 +35,7 @@ public class KeeperService extends Service {
         public void run() {
             if (!running) return;
             try {
-                KeeperUtil.restore(getApplicationContext());
+                KeeperUtil.ensure(getApplicationContext());
             } catch (Throwable t) {
                 Log.w(TAG, "check failed", t);
             }
@@ -64,6 +65,12 @@ public class KeeperService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundSafely();
+        // 守护一起来就把网页遥控端口的 HTTP server 拉起来（幂等）
+        try {
+            WebServer.get(getApplicationContext()).start();
+        } catch (Throwable t) {
+            Log.w(TAG, "web server start failed", t);
+        }
         if (!running) {
             running = true;
             worker.post(tick);
@@ -71,7 +78,7 @@ public class KeeperService extends Service {
         }
         worker.post(new Runnable() {
             @Override public void run() {
-                try { KeeperUtil.restore(getApplicationContext()); }
+                try { KeeperUtil.ensure(getApplicationContext()); }
                 catch (Throwable t) { Log.w(TAG, "immediate", t); }
             }
         });

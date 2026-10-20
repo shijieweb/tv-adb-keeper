@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ADB 常开</string>
-    <string name="a11y_desc">仅用于在开机时把 ADB 调试开关恢复为打开。不读取屏幕内容，不朗读任何界面。</string>
+    <string name="a11y_desc">两件事：①在开机时把 ADB 调试开关恢复为打开；②把手机/电脑网页上点的位置注入成电视上的触摸。不读取屏幕内容，不朗读任何界面。</string>
 </resources>

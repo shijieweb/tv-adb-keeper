@@ -57,7 +57,9 @@ final class Remote {
     /** 点一下。坐标是电视真实屏幕像素（1920x1080）。 */
     static boolean tap(Context ctx, int x, int y) {
         if (x < 0 || y < 0) return false;
-        return gesture(ctx, x, y, x, y, 40L, "tap " + x + "," + y);
+        // 100ms 而不是 40ms：Android TV 上的卡片要「先拿到焦点再确认」，
+        // 按压太短时部分 App（比如酷狗）会只当鼠标路过、不触发点击。
+        return gesture(ctx, x, y, x, y, 100L, "tap " + x + "," + y);
     }
 
     /** 长按。 */

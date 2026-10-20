@@ -18,10 +18,31 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          # 找 sdkmanager（路径随镜像版本变化：cmdline-tools/latest 或 cmdline-tools/<ver>）
+          SM="$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -n1 || true)"
+          if [ -z "$SM" ]; then
+            echo "no sdkmanager found, downloading cmdline-tools"
+            mkdir -p "$SDK/cmdline-tools"
+            curl -sS -o /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q -o /tmp/clt.zip -d /tmp/clt
+            mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/latest"
+            SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "sdkmanager: $SM"
+          echo "$(dirname "$SM")" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+          # 只装必需组件（注意：仓库里已没有名为 tools 的包，写 tools 会直接失败）
+          yes | "$SM" "platform-tools" "platforms;android-33" "build-tools;33.0.2" > /dev/null 2>&1 || true
+          "$SM" --list_installed 2>/dev/null | head -n 40 || true
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.5'
 

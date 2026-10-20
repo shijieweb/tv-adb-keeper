@@ -1,4 +1,10 @@
 plugins { id 'com.android.application' }
+
+// 固定签名：CI 默认生成的 debug keystore 每次都不一样，会导致「装不上、只能卸载重装」，
+// 而卸载会丢掉 pm grant 给的 WRITE_SECURE_SETTINGS，等于自愈功能失效。
+// 所以把 keystore 一起放仓库里（.github/debug.keystore.b64），本地/CI 都解到同一个路径。
+def ksPath = rootProject.file('keystore/debug.jks')
+
 android {
     namespace 'com.shijie.adbkeeper'
     compileSdk 33
@@ -9,9 +15,25 @@ android {
         versionCode 3
         versionName "3.0"
     }
+    signingConfigs {
+        if (ksPath.exists()) {
+            fixed {
+                storeFile ksPath
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
+    }
     buildTypes {
-        debug { minifyEnabled false }
-        release { minifyEnabled false }
+        debug {
+            minifyEnabled false
+            if (ksPath.exists()) signingConfig signingConfigs.fixed
+        }
+        release {
+            minifyEnabled false
+            if (ksPath.exists()) signingConfig signingConfigs.fixed
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

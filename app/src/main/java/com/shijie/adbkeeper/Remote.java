@@ -47,6 +47,11 @@ final class Remote {
         return svc != null;
     }
 
+    /** 给 Consent / ScreenCapture 之外的地方取当前实例用，可能为 null。 */
+    static AccessibilityService service() {
+        return svc;
+    }
+
     // ------------------------------------------------------------------ 手势
 
     /** 点一下。坐标是电视真实屏幕像素（1920x1080）。 */

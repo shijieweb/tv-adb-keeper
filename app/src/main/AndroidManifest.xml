@@ -15,6 +15,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 只为把系统的投屏授权框顶出来；自身透明、无布局，拿到结果立刻退出。
+             注意：这里不能用 noHistory="true" —— 授权框一出来本 Activity 就 stop，
+             noHistory 会把它直接销毁，onActivityResult 收不到，投屏就永远起不来。 -->
+        <activity
+            android:name=".ProjectionRequestActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
         <service android:name=".KeeperService" android:exported="false" />
 
         <!-- 第三条腿：persisted job（写进 /data/system/job/，重启后由 JobSchedulerService

@@ -81,6 +81,21 @@ public class MainActivity extends Activity {
                 }, 500);
             }
         }));
+        root.addView(button("开启画面投屏（让网页能看到电视）", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (ScreenCapture.hasPermission()
+                        && ScreenCapture.get(getApplicationContext()).isStarted()) {
+                    toast("画面已经开着，不用再点");
+                    return;
+                }
+                toast("电视上会闪一下授权框，会自动点掉，稍等两秒");
+                ScreenCapture.get(getApplicationContext()).stop();
+                ScreenCapture.requestPermission(getApplicationContext());
+                ui.postDelayed(new Runnable() {
+                    @Override public void run() { refresh(); }
+                }, 2500);
+            }
+        }));
         root.addView(button("打开开发者选项页", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -129,6 +144,16 @@ public class MainActivity extends Activity {
         sb.append("当前 ADB 开关：").append(v == 1 ? "开 ✓" : (v == 0 ? "关 ✗" : "读不到")).append('\n');
         sb.append("开机自愈入口：").append(a11yRegistered() ? "已注册 ✓" : "未注册 ✗").append('\n');
         sb.append("点击注入通道：").append(Remote.canInject() ? "已连通 ✓" : "未连通 ✗").append('\n');
+        ScreenCapture sc = ScreenCapture.get(getApplicationContext());
+        sb.append("画面投屏：");
+        if (sc.isStarted() && ScreenCapture.hasPermission()) {
+            sb.append("已开启 ✓");
+        } else if (ScreenCapture.hasPermission()) {
+            sb.append("授权已拿到，待启动");
+        } else {
+            sb.append("未授权（点下面按钮，电视上会自动确认）");
+        }
+        sb.append('\n');
         sb.append("网页遥控：");
         if (webUp) {
             sb.append("已开启 ✓\n    http://").append(ip).append(':').append(ws.port());

@@ -192,6 +192,16 @@ final class WebServer {
                 respond(out, 200, "text/html; charset=utf-8", html());
             } else if ("/status".equals(path)) {
                 respondText(out, statusText());
+            } else if ("/frame.jpg".equals(path) || "/frame".equals(path)) {
+                respondFrame(out);
+            } else if ("/screen".equals(path)) {
+                // 浏览器点「同步」时主动探一次：能在 1.5 秒内拿到帧就算通了
+                ScreenCapture sc = ScreenCapture.get(app);
+                if (!sc.isStarted() && ScreenCapture.hasPermission()) sc.start();
+                byte[] f = sc.frame(1500);
+                respondText(out, f == null
+                        ? "画面未就绪（可能正在等电视上的投屏授权）"
+                        : "画面已就绪 " + f.length + " 字节");
             } else if ("/apps".equals(path)) {
                 respond(out, 200, "application/json; charset=utf-8", apps());
             } else if ("/tap".equals(path)) {
@@ -251,6 +261,36 @@ final class WebServer {
         respond(out, 200, "text/plain; charset=utf-8", s.getBytes("UTF-8"));
     }
 
+    /**
+     * 返回一帧电视画面的 JPEG。
+     *
+     * 等最多 2 秒拿一帧新的；电视还没授权投屏时返回 503 + 一句说明，
+     * 网页那边据此显示「正在等电视授权」而不是一直转圈。
+     */
+    private void respondFrame(OutputStream out) throws IOException {
+        ScreenCapture sc = ScreenCapture.get(app);
+        if (!sc.isStarted()) {
+            if (ScreenCapture.hasPermission()) {
+                sc.start();
+            } else {
+                ScreenCapture.requestPermission(app);
+            }
+        }
+        byte[] f = sc.frame(2000);
+        if (f == null) {
+            respond(out, 503, "text/plain; charset=utf-8",
+                    "画面未就绪（正在等电视上的投屏授权）".getBytes("UTF-8"));
+            return;
+        }
+        String head = "HTTP/1.1 200 OK\r\n"
+                + "Content-Type: image/jpeg\r\n"
+                + "Content-Length: " + f.length + "\r\n"
+                + "Cache-Control: no-store\r\n"
+                + "Connection: close\r\n\r\n";
+        out.write(head.getBytes("UTF-8"));
+        out.write(f);
+    }
+
     private void respond(OutputStream out, int code, String ctype, byte[] body) throws IOException {
         String head = "HTTP/1.1 " + code + (code == 200 ? " OK" : " ERROR") + "\r\n"
                 + "Content-Type: " + ctype + "\r\n"
@@ -284,6 +324,8 @@ final class WebServer {
         StringBuilder sb = new StringBuilder();
         sb.append("在线 · 端口 ").append(actualPort);
         sb.append(" · 点击注入 ").append(Remote.canInject() ? "可用" : "未启用");
+        ScreenCapture sc = ScreenCapture.get(app);
+        sb.append(" · 画面 ").append(sc.isStarted() ? "可用" : (ScreenCapture.hasPermission() ? "待启动" : "待授权"));
         sb.append(" · ADB ").append(KeeperUtil.currentAdb(app) == 1 ? "开" : "关");
         return sb.toString();
     }

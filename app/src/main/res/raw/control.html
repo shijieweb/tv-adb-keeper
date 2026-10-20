@@ -31,6 +31,17 @@
     touch-action: none;
     cursor: crosshair;
   }
+  /* 画面层：跟电视实时画面 */
+  #shot {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    background: #161b22;
+    display: none;
+    pointer-events: none;
+  }
+  #pad.live #shot { display: block; }
+  #pad.live .hint { display: none; }
   #pad .hint {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
@@ -43,10 +54,17 @@
     border: 2px solid #58a6ff;
     pointer-events: none; opacity: 0;
     transition: opacity .35s;
+    z-index: 3;
   }
   #dot.on { opacity: 1; transition: none; }
   #dot.trail {
     transition: left .10s linear, top .10s linear, opacity .35s;
+  }
+  /* 画面右上角的小状态点 */
+  #badge {
+    position: absolute; top: 8px; right: 10px; z-index: 4;
+    font-size: 11px; color: #7d8590; background: rgba(13,17,23,.72);
+    padding: 2px 7px; border-radius: 20px; pointer-events: none;
   }
   .row {
     display: flex; gap: 8px; padding: 10px 10px 0;
@@ -60,6 +78,9 @@
     border-radius: 10px;
   }
   button:active { background: #30363d; }
+  button.on {
+    background: #1f6feb; border-color: #58a6ff;
+  }
   #msg { padding: 8px 14px 0; font-size: 13px; color: #7d8590; min-height: 20px; }
   #apps { padding: 6px 10px 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   #apps button { font-size: 14px; padding: 12px 6px; }
@@ -71,9 +92,16 @@
 
 <div id="padwrap">
   <div id="pad">
+    <img id="shot" alt="">
     <div class="hint">在这里点 = 点电视<br>按住拖动 = 滑动</div>
+    <div id="badge"></div>
     <div id="dot"></div>
   </div>
+</div>
+
+<div class="row">
+  <button id="btnSync" onclick="toggleSync()">画面：开</button>
+  <button onclick="snap()">拍一张</button>
 </div>
 
 <div class="row">
@@ -93,8 +121,83 @@ const pad = document.getElementById('pad');
 const dot = document.getElementById('dot');
 const msg = document.getElementById('msg');
 const stateEl = document.getElementById('state');
+const shot = document.getElementById('shot');
+const badge = document.getElementById('badge');
+const btnSync = document.getElementById('btnSync');
 const W = 1920, H = 1080;
 
+/* ---------------- 画面同步 ----------------
+   开：每 1.4 秒拉一帧；点完立刻补一帧（能马上看到结果）
+   关：完全不拉，省流量/省电，就是纯黑框
+   实现上用 <img> 直接换 src，不做 fetch blob，老手机浏览器也不卡。 */
+let syncOn = true;
+let syncTimer = null;
+let lastUrl = '';
+
+function setBadge(t) { badge.textContent = t || ''; }
+
+function pullFrame(force) {
+  // 加时间戳防缓存；force=false 时若上一帧还没回来就跳过，避免堆请求
+  if (!syncOn && !force) return;
+  if (pullFrame.busy && !force) return;
+  pullFrame.busy = true;
+  const url = '/frame.jpg?t=' + Date.now();
+  const img = new Image();
+  img.onload = () => {
+    shot.src = url;
+    pad.classList.add('live');
+    lastUrl = url;
+    pullFrame.busy = false;
+    setBadge('实时 · ' + new Date().toLocaleTimeString().slice(0, 8));
+    if (pullFrame.fail) { pullFrame.fail = 0; }
+  };
+  img.onerror = () => {
+    pullFrame.busy = false;
+    pullFrame.fail = (pullFrame.fail || 0) + 1;
+    if (pullFrame.fail <= 3) setBadge('画面未就绪');
+    else { setBadge('画面不可用'); }
+  };
+  img.src = url;
+}
+
+function loop() {
+  clearTimeout(syncTimer);
+  if (!syncOn) return;
+  pullFrame(false);
+  syncTimer = setTimeout(loop, 1400);
+}
+
+function toggleSync() {
+  syncOn = !syncOn;
+  btnSync.textContent = syncOn ? '画面：开' : '画面：关';
+  btnSync.classList.toggle('on', syncOn);
+  if (syncOn) {
+    setBadge('正在拉画面');
+    loop();
+  } else {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+    pad.classList.remove('live');
+    shot.removeAttribute('src');
+    setBadge('');
+    showMsg('画面同步已关（省流量）。点「拍一张」可以随时看一眼。');
+  }
+}
+
+function snap() {
+  setBadge('抓一帧…');
+  pullFrame(true);
+  showMsg('已请求一帧画面。');
+}
+
+/* 点完立刻刷一帧，这样能马上看到"我点中了没"——老板最需要的反馈 */
+function refreshSoon() {
+  if (!syncOn) return;
+  setTimeout(() => pullFrame(true), 420);
+  setTimeout(() => pullFrame(true), 1100);
+}
+
+/* ---------------- 基础 ---------------- */
 function showMsg(t) { msg.textContent = t; }
 
 function mark(px, py) {
@@ -126,7 +229,7 @@ function post(path, params) {
   stateEl.textContent = '发送中…';
   return fetch(path, { method: 'POST', body })
     .then(r => r.text())
-    .then(t => { stateEl.textContent = t; return t; })
+    .then(t => { stateEl.textContent = t; refreshSoon(); return t; })
     .catch(e => { stateEl.textContent = '连不上'; showMsg('请求失败：' + e); });
 }
 
@@ -187,8 +290,12 @@ function loadApps() {
   }).catch(() => {});
 }
 
+/* 启动 */
+btnSync.classList.add('on');
 fetch('/status').then(r => r.text()).then(t => { stateEl.textContent = t; }).catch(() => { stateEl.textContent = '离线'; });
 loadApps();
+pullFrame(true);          // 首帧：就算同步关着也让老板先看一眼当前画面
+loop();
 </script>
 </body>
 </html>

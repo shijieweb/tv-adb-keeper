@@ -91,6 +91,7 @@ public class MainActivity extends Activity {
         ui.post(refresher);
         // 每次打开界面：确保守护在跑 + 确保开机自愈入口在册（幂等）
         KeeperUtil.registerSelfAsA11y(getApplicationContext());
+        KeeperJobService.arm(getApplicationContext());
         Intent i = new Intent(this, KeeperService.class);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
     }

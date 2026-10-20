@@ -16,6 +16,13 @@
         </activity>
         <service android:name=".KeeperService" android:exported="false" />
 
+        <!-- 第三条腿：persisted job（写进 /data/system/job/，重启后由 JobSchedulerService
+             主动重排，不走 BOOT_COMPLETED 广播，厂商拦不住）。 -->
+        <service
+            android:name=".KeeperJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <!-- 关键：开机时由 system_server 的 AccessibilityManagerService 按 settings 里
              持久化的 enabled_accessibility_services 列表主动绑定，绕开厂商对第三方
              App 自启动（BOOT_COMPLETED）的拦截。本服务不做任何界面朗读。 -->

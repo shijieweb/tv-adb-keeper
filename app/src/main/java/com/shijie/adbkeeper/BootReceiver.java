@@ -18,6 +18,7 @@ public class BootReceiver extends BroadcastReceiver {
         String a = intent == null ? null : intent.getAction();
         Log.i(TAG, "boot receiver: " + a);
         KeeperUtil.restore(ctx);
+        KeeperJobService.arm(ctx);
         KeeperService.kick(ctx);
     }
 }

@@ -74,7 +74,22 @@ adb shell cmd deviceidle whitelist +com.shijie.adbkeeper
 2. 浏览器打开 `http://<电视IP>:8848/`（电视上 App 首页会直接显示这个地址）。
 3. 画布上会实时显示电视画面（每 1.4 秒刷一帧）。点 = 点电视；按住拖动 = 滑动；按住不动 550ms 以上 = 长按。
 4. 右上「画面：开/关」可以暂停同步（省流量、省电视 CPU）；「拍一张」立刻抓一帧。
-4. 下面有 主页 / 返回 / 最近 / 通知 四个键，以及电视上所有可启动应用的按钮。
+5. 下面有 主页 / 返回 / 最近 / 通知 四个键，以及电视上所有可启动应用的按钮。
+
+## 网页端口挂了怎么自救（不需要 adb）
+
+电视桌面（`com.gathin.tvhome`）第一行第三个卡片就是 **「ADB 常开」**（绿色安卓图标），用遥控器按方向键选到它、
+按确认键打开即可。打开后 App 会自动把网页端口和点击注入通道都拉起来，屏幕上会显示地址。
+
+> 这个入口是 **v5.0 才有的**。v4 及更早只声明了 `CATEGORY_LAUNCHER`，而 MiTV 桌面的卡片区和「常用」列表
+> 只列带 `CATEGORY_LEANBACK_LAUNCHER` 的应用 —— 结果是 App 装上了但电视上完全找不到入口，进程被系统停掉后
+> 只能靠 adb 拉起来，而 adb 又被厂商关，形成死锁。**装 v5.0 之前请确认这一条**：
+>
+> ```
+> adb shell "cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER --brief"
+> ```
+>
+> 输出里没有 `com.shijie.adbkeeper` 就说明是旧版。
 
 接口（也可以自己写脚本调）：
 
@@ -127,11 +142,15 @@ App 首页实时显示 5 项状态（每 2 秒刷新）：
 - 已在 MiTV-ANSP0（Android 9 / SDK 28 / armeabi-v7a / 2GB RAM）上验证：
   连续 3 次重启，每次都在厂商写 0 后 2 秒内抢回，网页端口 8848 全程可用
 - 点击注入要求 Android 7.0+（`dispatchGesture` 是 API 24）
+- v5.0 起同时声明 `CATEGORY_LAUNCHER` 与 `CATEGORY_LEANBACK_LAUNCHER`，所以在电视桌面和手机上都看得到入口
 
 ## 已知限制
 
 - **只能在「厂商写 0 之后」抢回来，不是真正阻止厂商写。** 实测窗口期约 2 秒，
   这 2 秒内 adb 连不上。
+- **进程被系统停掉后不会自己回来**：三条腿只能保证开机时被拉起。运行中被省电策略、
+  厂商清理或 `am force-stop` 杀掉后，要人去电视桌面点一次「ADB 常开」（v5.0 提供了这个入口）。
+  加固办法：`adb shell cmd deviceidle whitelist +com.shijie.adbkeeper`（重启后需重加）。
 - 无障碍服务是唯一的注入通道。如果有人在设置里把它关掉、或者把 App
   force-stop / 卸载重装，注入会失效，得重新 `pm grant` + 打开一次 App。
 - Android 10+ 的后台启动 Activity 限制更严，`/open` 在新系统上可能被拦；

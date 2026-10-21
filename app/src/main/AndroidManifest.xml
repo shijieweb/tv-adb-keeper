@@ -9,10 +9,16 @@
         android:allowBackup="false"
         android:label="ADB 常开"
         android:supportsRtl="false">
+        <!-- 两个 category 都要有：
+             LAUNCHER        —— 普通桌面能看到。
+             LEANBACK_LAUNCHER —— 实测本机电视桌面（com.gathin.tvhome）的「常用」应用列表
+                                 只列带 LEANBACK 的应用，少了这个老板用遥控器根本找不到本 App，
+                                 App 被系统停掉后就没法自助拉起来。 -->
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
 
